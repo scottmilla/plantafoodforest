@@ -20,6 +20,7 @@ export interface SavedForest {
   year: number
 }
 const SAVE_KEY = 'pff.saves.v1'
+const EMAIL_KEY = 'pff.email.v1' // { email, optIn }: asked once, remembered on this device
 const MAX_SAVES = 20
 
 const stage = ref<Stage>('intro')
@@ -38,6 +39,9 @@ const loading = ref(false)
 const regenerating = ref(false)
 const error = ref('')
 const saves = ref<SavedForest[]>([])
+const email = ref('')
+const optIn = ref(false)
+const saving = ref(false)
 const currentSaveId = ref<string | null>(null) // the slot Save updates, once this forest has been saved or loaded
 const ui = reactive({ system: false, fruits: false, saves: false, designer: false, birdseye: false, tractor: false, forceDay: false, mobile: false })
 const input = reactive({ forward: false, back: false, left: false, right: false })
@@ -66,6 +70,10 @@ function writeSaves(list: SavedForest[]) {
 if (typeof window !== 'undefined') {
   setInterval(() => (clock.value = Date.now()), 60_000)
   saves.value = readSaves()
+  try {
+    const e = JSON.parse(localStorage.getItem(EMAIL_KEY) ?? 'null')
+    if (e?.email) { email.value = e.email; optIn.value = !!e.optIn }
+  } catch { /* nothing remembered */ }
 }
 
 const clean = (m: OverrideMap): OverrideMap => Object.fromEntries(Object.entries(m).filter(([, v]) => v.add.length || v.remove.length))
@@ -213,9 +221,10 @@ export function useSurvey() {
     const d = design.value
     return `${site.value?.label ?? 'My forest'}${d ? ' · ' + d.name : ''}`.slice(0, 60)
   }
+  // Saves locally first (so it always works), then sends the email + a snapshot to the server for the list.
   // pass `asNew` to save a copy instead of updating the slot this forest came from
-  function saveCurrent(name: string, asNew = false) {
-    if (!site.value) return
+  async function saveCurrent(name: string, asNew = false) {
+    if (!site.value || saving.value) return
     const entry: SavedForest = {
       id: (!asNew && currentSaveId.value) || `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
       name: name.trim().slice(0, 60) || suggestName(),
@@ -230,8 +239,26 @@ export function useSurvey() {
     }
     writeSaves([entry, ...saves.value.filter((x) => x.id !== entry.id)].slice(0, MAX_SAVES))
     currentSaveId.value = entry.id
-    say(`💾 Saved “${entry.name}”`)
-    return entry.id
+    email.value = email.value.trim()
+    try { localStorage.setItem(EMAIL_KEY, JSON.stringify({ email: email.value, optIn: optIn.value })) } catch { /* private mode */ }
+    saving.value = true
+    try {
+      const d = design.value
+      await $fetch('/api/subscribe', {
+        method: 'POST',
+        body: {
+          email: email.value, marketingOptIn: optIn.value, name: entry.name, site: entry.site, areaM2: entry.areaM2, goals: entry.goals, overrides: entry.overrides,
+          designName: d?.name, designSpecies: d?.species.filter((x) => x.yieldKg > 0).map((x) => `${x.name} ×${Math.round(x.count * d.plot.scale)}`),
+        },
+      })
+      say(`💾 Saved “${entry.name}”`)
+    } catch (e: any) {
+      // a bad email is the only thing the person can fix; anything else we absorb quietly since the local save worked
+      if (e?.statusCode === 400 || e?.status === 400) error.value = e?.data?.statusMessage || 'Please check your email address.'
+      else say(`💾 Saved on this device (“${entry.name}”)`)
+    } finally {
+      saving.value = false
+    }
   }
   async function loadSave(id: string) {
     const sv = saves.value.find((x) => x.id === id)
@@ -264,7 +291,7 @@ export function useSurvey() {
 
   return {
     stage, place, site, weather, imperial, env, areaM2, unit, units, goals, designs, catalog, overrides, edits, edited, model, active, design, designId, plot, year, selected,
-    loading, regenerating, error, ui, input, toast, saves, currentSaveId, say, locate, setLand, toggleGoal, generate, pickDesign, restart,
+    loading, regenerating, error, ui, input, toast, saves, currentSaveId, email, optIn, saving, say, locate, setLand, toggleGoal, generate, pickDesign, restart,
     addFruit, removeFruit, resetFruit, suggestName, saveCurrent, loadSave, deleteSave,
   }
 }

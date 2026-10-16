@@ -314,3 +314,8 @@ select.field { width: auto; }
 .saved .open { flex: 1; min-width: 0; text-align: left; font: inherit; color: var(--ink); cursor: pointer; padding: .4em .7em; background: #fffdf6; border: 2px solid var(--ink); border-radius: var(--r-soft); box-shadow: 0 3px 0 var(--ink); display: flex; flex-direction: column; line-height: 1.2; }
 .saved li.now .open { background: linear-gradient(120deg, #fff1b8, #ffd98a); }
 .saved .open small { font-size: .75rem; opacity: .75; }
+
+.optin { display: flex; align-items: flex-start; gap: .55rem; font-size: .92rem; line-height: 1.3; cursor: pointer; }
+.optin input { flex: none; width: 1.25rem; height: 1.25rem; margin-top: .1rem; accent-color: var(--violet); }
+.savepanel .fine { margin: 0; }
+.field[aria-invalid="true"] { border-color: #b3261e; }

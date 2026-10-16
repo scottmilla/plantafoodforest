@@ -56,6 +56,14 @@ NUXT_LEAD_TO_EMAIL=you@example.com
 
 Without a key, leads are only logged to the server console.
 
+## Email list
+
+Saving a forest asks for an email (once, then remembered on that device) plus an optional "send me tips" checkbox. `POST /api/subscribe` emails you a **"New subscriber"** note (their email, whether they opted in, where they are, what they built). Your inbox is the list: search for "New subscriber", and filter on "opted in" for anyone you can send newsletters to. Their save itself always works on their own device, whether or not the email goes out.
+
+There's deliberately no database. Vercel functions can't keep files between runs (so SQLite or a `.txt` file would lose data), and this avoids running one. If the list outgrows an inbox, the next step is adding each address to a Resend Audience in the same endpoint (one extra API call).
+
+Emails are sent with [Resend](https://resend.com), the same as designer requests, via `server/utils/mail.ts`.
+
 ## Deploy (Vercel)
 
 Import the repo in Vercel; Nuxt is auto-detected. Add the env vars above under Project → Settings → Environment Variables.

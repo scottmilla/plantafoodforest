@@ -179,3 +179,16 @@ export interface Lead {
   designName?: string
   designSpecies?: string[] // what's actually planted in the design they liked, after their edits
 }
+
+// What the Save dialog sends to the server: the email for the list, plus a snapshot of the forest.
+export interface SaveSubmission {
+  email: string
+  marketingOptIn: boolean
+  name: string
+  site: Site
+  areaM2: number
+  goals: Goal[]
+  overrides: OverrideMap
+  designName?: string
+  designSpecies?: string[]
+}
