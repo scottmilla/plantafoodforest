@@ -53,6 +53,28 @@ onBeforeRender(({ delta }) => {
     want.set(player.x, 5.2 * t, player.z + 9.5 * t)
     look.set(player.x, 2.2, player.z - 5)
   }
+  if (stage !== 'intro') {
+    // spin the view: Q/E, the on-screen arrows, right-drag, or the slow auto-orbit
+    const spin = (s.input.rotR ? 1 : 0) - (s.input.rotL ? 1 : 0)
+    player.yaw += (spin * 1.7 + (s.ui.autoOrbit ? 0.2 : 0)) * Math.min(delta, 0.05)
+    if (player.yaw > Math.PI * 2) player.yaw -= Math.PI * 2
+    else if (player.yaw < -Math.PI * 2) player.yaw += Math.PI * 2
+    // pivot: the player when walking, the chosen plant when selected, otherwise the point the overview looks at
+    const walking = !plot || (!s.ui.birdseye && stage === 'explore')
+    const f = s.selected.value !== null ? player.focus : null
+    const px = f ? f.x : walking ? player.x : look.x
+    const pz = f ? f.z : walking ? player.z : look.z
+    const cs = Math.cos(player.yaw)
+    const sn = Math.sin(player.yaw)
+    const turn = (v: Vector3) => {
+      const dx = v.x - px
+      const dz = v.z - pz
+      v.x = px + dx * cs + dz * sn
+      v.z = pz - dx * sn + dz * cs
+    }
+    turn(want)
+    if (walking || f) turn(look) // the overview already looks at its own pivot
+  }
   if (!ready) {
     c.position.copy(want)
     ready = true

@@ -49,7 +49,7 @@ export interface PlaceResult {
 export type Strata = 'emergent' | 'high' | 'medium' | 'low' | 'ground'
 export type Succession = 'placenta' | 'secondary' | 'climax'
 export type Form = 'round' | 'spreading' | 'columnar' | 'conifer' | 'palm' | 'shrub' | 'pollard' | 'vine' | 'herb'
-export type Role = 'fruit' | 'berry' | 'nut' | 'timber' | 'support' | 'nfix' | 'biomass' | 'flower' | 'staple' | 'wildlife' | 'medicinal'
+export type Role = 'fruit' | 'berry' | 'nut' | 'timber' | 'support' | 'nfix' | 'biomass' | 'flower' | 'staple' | 'wildlife' | 'medicinal' | 'herb'
 
 export interface PlantSpec {
   id: string
@@ -144,6 +144,7 @@ export interface DesignRequest {
 // A food plant that can actually grow at the site (zone, chill, heat), offered in the fruit picker.
 export interface CatalogItem {
   id: string
+  kind: 'fruit' | 'herb'
   name: string
   latin: string
   emoji: string

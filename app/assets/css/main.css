@@ -319,3 +319,7 @@ select.field { width: auto; }
 .optin input { flex: none; width: 1.25rem; height: 1.25rem; margin-top: .1rem; accent-color: var(--violet); }
 .savepanel .fine { margin: 0; }
 .field[aria-invalid="true"] { border-color: #b3261e; }
+
+/* camera spin */
+.orbit { display: flex; gap: .3rem; touch-action: none; }
+.orbit .chip { padding: .35em .75em; user-select: none; -webkit-user-select: none; }

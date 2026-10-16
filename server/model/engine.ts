@@ -10,7 +10,7 @@ import { SPECIES, type Species } from './species'
 //   4. lay those pools out along tree lines (or contour lines) at strata-specific spacings
 //   5. project yields over time and explain the choices
 // Same input → same output, so designs are reproducible and debuggable. Swap any step for a learned one later.
-export const MODEL = 'syntropic-sage v0.2'
+export const MODEL = 'syntropic-sage v0.3'
 
 const MAX_RENDER_M2 = 20000 // ≈ 5 acres; bigger farms render a representative block and scale the stats
 
@@ -30,7 +30,7 @@ interface Slot {
   step: number
   offset: number
   side: number // metres off the line centre so neighbours in different strata don't collide
-  strata: Strata | 'support'
+  strata: Strata | 'support' | 'herb'
 }
 
 const ARCH: Record<Goal, { name: string; tagline: string }> = {
@@ -180,7 +180,7 @@ function lineLayout(rect: Rect, lineSpacing: number, slots: Slot[], seed: number
       let k = li // rotate the pool line-to-line so neighbouring lines don't mirror each other
       for (let z = rect.z0 + 0.6 + slot.offset; z < rect.z1 - 0.6; z += slot.step) {
         const bend = curve ? curve.amp * Math.sin(z * curve.freq + li * 0.35) : 0
-        const side = slot.side * (slot.strata === 'ground' ? (k % 2 ? 1 : -1) : 1)
+        const side = slot.side * (slot.strata === 'ground' || slot.strata === 'herb' ? (k % 2 ? 1 : -1) : 1)
         const x = lx + bend + side + (r() - 0.5) * 0.25
         const zz = z + (r() - 0.5) * 0.25
         if (x < rect.x0 + 0.3 || x > rect.x1 - 0.3) { k++; continue }
@@ -191,6 +191,42 @@ function lineLayout(rect: Rect, lineSpacing: number, slots: Slot[], seed: number
     }
   }
   return { placed, features }
+}
+
+// ─── herb layer ─────────────────────────────────────────────────────────────
+const isHerb = (c: Cand) => c.s.roles.includes('herb')
+
+function herbScore(c: Cand, w: Weights) {
+  const has = (r: string) => (c.s.roles as string[]).includes(r)
+  return 1
+    + (c.native ? 0.3 + 2 * (w.natives ?? 0) : 0)
+    + (c.s.uses?.includes('culinary') ? 0.7 * (w.yearRound ?? 0) : 0) // a family kitchen wants thyme and chives, not just prairie flowers
+    + (w.restoration ? (has('wildlife') ? 0.6 : 0) + (c.s.uses?.includes('pollinator') ? 0.4 : 0) : 0)
+    + (w.money ? Math.log1p((c.s.price ?? 8) * c.s.kg) * 0.5 : 0)
+    + (w.rare && !c.native ? 0.2 : 0)
+    - (c.marginal && !((w.rare ?? 0) >= 0.5) ? 1.2 : 0)
+    - (c.s.invasive && !w.restoration ? 2 : 0)
+    - c.dryPenalty
+}
+
+// Best herbs for the goals, spread across uses (a kitchen herb, a tea, a medicinal, a pollinator plant…) rather than five mints.
+function pickHerbs(cands: Cand[], k: number, w: Weights): Cand[] {
+  const out: Cand[] = []
+  const used = new Set<string>()
+  const left = cands.filter((c) => herbScore(c, w) > 0)
+  while (out.length < k && left.length) {
+    let best = 0
+    let bestVal = -Infinity
+    left.forEach((c, i) => {
+      const fresh = (c.s.uses ?? []).filter((u) => !used.has(u)).length
+      const v = herbScore(c, w) + fresh * 0.6
+      if (v > bestVal) { bestVal = v; best = i }
+    })
+    const [c] = left.splice(best, 1)
+    out.push(c!)
+    c!.s.uses?.forEach((u) => used.add(u))
+  }
+  return out
 }
 
 interface Plan {
@@ -213,7 +249,7 @@ function planBlock(p: Plan, site: Site, area: number, cands: Cand[], notes: stri
   const pool = arch === 'money' ? base.filter((c) => !removed.has(c.s.id)) : base
   const added = cands.filter((c) => ov.add.includes(c.s.id) && !removed.has(c.s.id) && (!natives || c.native))
   const food = pool.filter((c) => isFood(c.s))
-  const byStrata = (st: Strata, list = pool) => list.filter((c) => c.s.strata === st && !isSupportOnly(c.s) && !c.s.pollard && c.s.form !== 'herb')
+  const byStrata = (st: Strata, list = pool) => list.filter((c) => c.s.strata === st && !isSupportOnly(c.s) && !c.s.pollard && c.s.form !== 'herb' && !isHerb(c))
   const strata = allowedStrata(site, area, arch)
 
   // support trees are judged on their job (nitrogen, biomass, taking a pollard), not on their fruit
@@ -222,10 +258,13 @@ function planBlock(p: Plan, site: Site, area: number, cands: Cand[], notes: stri
     .filter((c) => (isSupportOnly(c.s) || (c.s.pollard && c.s.roles.includes('support'))) && (arch !== 'money' || c.s.pollard))
     .sort((a, b) => supportScore(b) - supportScore(a))
     .slice(0, arch === 'money' ? 1 : 2)
-  const groundCands = pool.filter((c) => c.s.form === 'herb')
+  const groundCands = pool.filter((c) => c.s.form === 'herb' && !isHerb(c))
   const ground = arch === 'money'
     ? pickPool(groundCands.filter((c) => !isFood(c.s)), 1, { restoration: 1 }, 'score', south)
     : pickPool(groundCands, arch === 'timber' ? 1 : 3, { ...w, yearRound: (w.yearRound ?? 0) + 0.3, restoration: (w.restoration ?? 0) + 0.3 }, 'score', south)
+  // every design gets a herb & shrub layer; the money design keeps it to a couple of market herbs
+  const herbN = { money: 2, yearRound: 5, rare: 5, natives: 4, restoration: 5, timber: 2 }[arch]
+  const herbs = pickHerbs(pool.filter(isHerb), herbN, w)
   const supportNames = support.map((c) => c.s.name.toLowerCase()).join(' and ')
 
   // ── Market Alley: one target tree + one berry, pollarded support, wide alleys ──
@@ -236,8 +275,9 @@ function planBlock(p: Plan, site: Site, area: number, cands: Cand[], notes: stri
     const berry = pickPool(berryC.filter((c) => c.s.id !== tree[0]?.s.id), 1, w, 'score', south)
     const known = (arr: Cand[], c: Cand) => arr.some((x) => x.s.id === c.s.id)
     for (const c of added) {
-      if (known(tree, c) || known(berry, c) || known(ground, c)) continue
-      if (c.s.form === 'herb' || c.s.strata === 'ground') ground.push(c)
+      if (known(tree, c) || known(berry, c) || known(ground, c) || known(herbs, c)) continue
+      if (isHerb(c)) herbs.push(c)
+      else if (c.s.form === 'herb' || c.s.strata === 'ground') ground.push(c)
       else if (c.s.strata === 'low' || c.s.form === 'shrub' || c.s.form === 'vine') berry.push(c)
       else tree.push(c)
     }
@@ -248,8 +288,10 @@ function planBlock(p: Plan, site: Site, area: number, cands: Cand[], notes: stri
       { pool: tree, step: treeStep, offset: 0, side: 0, strata: tree[0]?.s.strata ?? 'medium' },
       { pool: berry, step: 1.25, offset: 0.625, side: 0.35, strata: 'low' },
       { pool: support, step: treeStep * 2, offset: treeStep / 2, side: -0.3, strata: 'support' },
-      { pool: ground, step: big ? 3 : 2, offset: 1, side: 0.9, strata: 'ground' },
+      { pool: herbs, step: big ? 2.2 : 1.6, offset: 0.8, side: 0.7, strata: 'herb' },
+      { pool: ground, step: big ? 3 : 2, offset: 1, side: 1.15, strata: 'ground' },
     ]
+    if (herbs.length) notes.push(`Herb layer: ${herbs.map((c) => c.s.name.toLowerCase()).join(' and ')} along the beds: a second small income that pays from year 1.`)
     if (tree[0] && berry[0]) notes.push(`Target crops: ${tree[0].s.name} (first harvest ~year ${tree[0].s.ytf}) carried by ${berry[0].s.name} from year ${berry[0].s.ytf}.`)
     notes.push(`Lines ${lineSpacing.toFixed(0)} m apart so a compact tractor and mower fit down every alley.`)
     if (support[0]) notes.push(`${support[0].s.name} is pollarded between the crop trees: nitrogen and mulch without shading the money.`)
@@ -279,10 +321,12 @@ function planBlock(p: Plan, site: Site, area: number, cands: Cand[], notes: stri
   }
   for (const list of Object.values(pools)) dropRemoved(list!)
   dropRemoved(ground)
+  dropRemoved(herbs)
   const order: Strata[] = ['emergent', 'high', 'medium', 'low']
   const open = order.filter((x) => strata.includes(x))
   for (const c of added) {
-    if (Object.values(pools).some((l) => l!.some((x) => x.s.id === c.s.id)) || ground.some((x) => x.s.id === c.s.id)) continue
+    if (Object.values(pools).some((l) => l!.some((x) => x.s.id === c.s.id)) || ground.some((x) => x.s.id === c.s.id) || herbs.some((x) => x.s.id === c.s.id)) continue
+    if (isHerb(c)) { herbs.push(c); continue }
     if (c.s.form === 'herb' || c.s.strata === 'ground') { ground.push(c); continue }
     const at = open.includes(c.s.strata) ? c.s.strata : (open.find((x) => order.indexOf(x) >= order.indexOf(c.s.strata)) ?? open[open.length - 1] ?? 'medium')
     ;(pools[at] ??= []).push(c)
@@ -296,7 +340,8 @@ function planBlock(p: Plan, site: Site, area: number, cands: Cand[], notes: stri
     { pool: pools.medium ?? [], step: 4 * mult, offset: 2 * mult, side: 0.3, strata: 'medium' },
     { pool: pools.low ?? [], step: 2 * mult, offset: 1 * mult, side: -0.45, strata: 'low' },
     { pool: support, step: 4 * mult, offset: 0.4, side: 0.55, strata: 'support' },
-    { pool: ground, step: big ? 2 : 1, offset: 0.5, side: 0.95, strata: 'ground' },
+    { pool: herbs, step: (big ? 2.2 : 1.6) * mult, offset: 0.8, side: 0.65, strata: 'herb' },
+    { pool: ground, step: big ? 2 : 1, offset: 0.5, side: 1.15, strata: 'ground' },
   ]
 
   let out: LayoutOut
@@ -331,6 +376,7 @@ function planBlock(p: Plan, site: Site, area: number, cands: Cand[], notes: stri
     out = lineLayout(rect, lineSpacing, slots, p.seed)
   }
 
+  if (herbs.length) notes.push(`Herb & shrub layer: ${herbs.slice(0, 5).map((c) => c.s.name).join(', ')}. Kitchen, tea, medicine and pollinator plants filling every gap.`)
   const used = strata.filter((s) => s === 'ground' ? ground.length : (pools[s]?.length ?? 0) > 0)
   const lat = Math.abs(site.lat)
   notes.push(`${used.length} strata stacked at ${lat.toFixed(0)}° from the equator${used.length < 5 ? '. Closer to the tropics a line can carry more layers.' : '. In the tropics every layer is in play.'}`)
@@ -364,11 +410,11 @@ function stats(species: DesignSpecies[], plants: Placement[], scale: number, lin
   species.forEach((s, i) => (strataMix[s.strata] += Math.round(counts[i]! * scale)))
   const harvestMonths = Array.from({ length: 12 }, () => 0)
   for (const s of species) {
-    if (!s.yieldKg || !s.yearsToFruit) continue
+    if (!s.yieldKg || !s.yearsToFruit || s.roles.includes('herb')) continue // the calendar and first-harvest year are about fruit, not herbs
     const ms = new Set(s.varieties.length ? s.varieties.flatMap((v) => monthsOf(v.harvest)) : monthsOf(s.harvest))
     ms.forEach((m) => harvestMonths[m - 1]!++)
   }
-  const yielding = species.filter((s) => s.yieldKg && s.yearsToFruit)
+  const yielding = species.filter((s) => s.yieldKg && s.yearsToFruit && !s.roles.includes('herb'))
   const yieldByYear = [1, 2, 3, 4, 5, 7, 10, 15, 20].map((year) => {
     let kg = 0
     let revenue = 0
@@ -496,16 +542,24 @@ export function design(req: DesignRequest): DesignResponse {
   return { model: MODEL, designs, catalog: catalogFor(site, w1) }
 }
 
-// Every food plant that can really grow at the site (no zone-pushing past the user's zone), best matches for their goals first.
+// Every fruit, berry, nut and herb that can really grow at the site (no zone-pushing past the user's zone), best matches for their goals first.
 export function catalogFor(site: Site, weights: Weights): CatalogItem[] {
   const south = site.hemisphere === 'S'
-  const ranked = candidates(site, 0)
-    .filter((c) => isFood(c.s) && c.s.roles.some((r) => r === 'fruit' || r === 'berry' || r === 'nut'))
+  const all = candidates(site, 0)
+  const item = (c: Cand, kind: CatalogItem['kind'], recommended: boolean): CatalogItem => ({
+    id: c.s.id, kind, name: c.s.name, latin: c.s.latin, emoji: c.s.emoji, strata: c.s.strata, roles: c.s.roles, native: c.native, marginal: c.marginal,
+    yearsToFruit: c.s.ytf, yieldKg: c.s.kg, harvest: c.s.harvest ? shiftWin(c.s.harvest, south) : undefined, pricePerKg: c.s.price,
+    fruit: c.s.fruit, leaf: c.s.leaf, recommended, note: c.s.note,
+  })
+  const fruit = all
+    .filter((c) => !isHerb(c) && isFood(c.s) && c.s.roles.some((r) => r === 'fruit' || r === 'berry' || r === 'nut'))
     .map((c) => ({ c, sc: score(c, weights) }))
     .sort((a, b) => b.sc - a.sc)
-  return ranked.map(({ c, sc }, i) => ({
-    id: c.s.id, name: c.s.name, latin: c.s.latin, emoji: c.s.emoji, strata: c.s.strata, roles: c.s.roles, native: c.native, marginal: c.marginal,
-    yearsToFruit: c.s.ytf, yieldKg: c.s.kg, harvest: c.s.harvest ? shiftWin(c.s.harvest, south) : undefined, pricePerKg: c.s.price,
-    fruit: c.s.fruit, leaf: c.s.leaf, recommended: sc > 0 && i < 30, note: c.s.note,
-  }))
+    .map(({ c, sc }, i) => item(c, 'fruit', sc > 0 && i < 30))
+  const herbs = all
+    .filter(isHerb)
+    .map((c) => ({ c, sc: herbScore(c, weights) }))
+    .sort((a, b) => b.sc - a.sc)
+    .map(({ c }, i) => item(c, 'herb', i < 12))
+  return [...fruit, ...herbs]
 }

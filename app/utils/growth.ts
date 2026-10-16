@@ -2,8 +2,17 @@ import type { PlantSpec } from '#shared/types'
 
 // How big a plant is in a given year of the system (0..1 of mature size). Placenta crops are gone
 // once their life is done: succession in action as the year slider moves.
-export function plantGrowth(sp: Pick<PlantSpec, 'form' | 'heightM' | 'strata' | 'pollard' | 'succession' | 'lifespanYears'>, year: number) {
-  if (sp.succession === 'placenta' && year > sp.lifespanYears + 0.5) return 0
+// Share of a species' plants thinned out by a given year: support (secondary) trees are cut back as the
+// canopy closes and the long-term (climax) trees then self-thin, so the stand gets sparser and taller.
+export function thinnedShare(sp: Pick<PlantSpec, 'succession'>, year: number) {
+  const ramp = (from: number, to: number, max: number) => max * Math.min(1, Math.max(0, (year - from) / (to - from)))
+  return sp.succession === 'secondary' ? ramp(2, 10, 0.9) : sp.succession === 'climax' ? ramp(5, 20, 0.5) : 0
+}
+
+// `rank` (0..1, stable per plant) decides which individuals are thinned first.
+export function plantGrowth(sp: Pick<PlantSpec, 'form' | 'heightM' | 'strata' | 'pollard' | 'succession' | 'lifespanYears'>, year: number, rank = 1) {
+  if (sp.succession !== 'climax' && year > sp.lifespanYears + 0.5) return 0
+  if (rank < thinnedShare(sp, year)) return 0
   const mature =
     sp.form === 'herb' ? 1
       : sp.form === 'shrub' ? 3

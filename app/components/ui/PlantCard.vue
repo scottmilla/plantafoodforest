@@ -12,7 +12,7 @@ const scale = computed(() => s.design.value?.plot.scale ?? 1)
 
 const STRATA = { emergent: 'Emergent', high: 'High', medium: 'Medium', low: 'Low', ground: 'Ground' } as const
 const SUCC = { placenta: 'Placenta (first years)', secondary: 'Secondary (5–40 yrs)', climax: 'Climax (long-lived)' } as const
-const ROLE: Record<string, string> = { fruit: 'fruit', berry: 'berries', nut: 'nuts', timber: 'timber', support: 'support', nfix: 'nitrogen-fixer', biomass: 'biomass', flower: 'flowers', staple: 'staple food', wildlife: 'wildlife', medicinal: 'medicine' }
+const ROLE: Record<string, string> = { fruit: 'fruit', berry: 'berries', nut: 'nuts', timber: 'timber', support: 'support', nfix: 'nitrogen-fixer', biomass: 'biomass', flower: 'flowers', staple: 'staple food', wildlife: 'wildlife', medicinal: 'medicine', herb: 'herb' }
 
 const nowYield = computed(() => (sp.value ? yieldAt(sp.value, s.year.value) : 0))
 function close() {

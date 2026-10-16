@@ -29,7 +29,8 @@ const thisYear = computed(() => {
 })
 const species = computed(() => [...(d.value?.species ?? [])].sort((a, b) => b.count - a.count))
 // the fruit, nut and berry plants are what people come for, so they lead the panel
-const fruitTrees = computed(() => species.value.filter((sp) => sp.yieldKg > 0 && sp.form !== 'herb' && sp.roles.some((r) => r === 'fruit' || r === 'berry' || r === 'nut')))
+const fruitTrees = computed(() => species.value.filter((sp) => sp.yieldKg > 0 && sp.form !== 'herb' && !sp.roles.includes('herb') && sp.roles.some((r) => r === 'fruit' || r === 'berry' || r === 'nut')))
+const herbLayer = computed(() => species.value.filter((sp) => sp.roles.includes('herb')))
 const mature = computed(() => curve.value.find((y) => y.year === 10) ?? curve.value[curve.value.length - 1])
 </script>
 
@@ -55,6 +56,17 @@ const mature = computed(() => curve.value.find((y) => y.year === 10) ?? curve.va
           <b>×{{ Math.round(sp.count * d.plot.scale).toLocaleString() }}</b>
         </li>
       </ul>
+
+      <template v-if="herbLayer.length">
+        <h3>Herb &amp; shrub layer</h3>
+        <ul class="fruit-strip herb-strip">
+          <li v-for="sp in herbLayer" :key="sp.id" :style="{ '--accent': sp.fruit ?? sp.leaf }">
+            <span class="fe">{{ sp.emoji }}</span>
+            <span class="fn">{{ sp.name }}</span>
+            <b>×{{ Math.round(sp.count * d.plot.scale).toLocaleString() }}</b>
+          </li>
+        </ul>
+      </template>
 
       <div class="stat-row">
         <div><b>{{ d.stats.plantCount.toLocaleString() }}</b><small>plants</small></div>

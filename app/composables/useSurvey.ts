@@ -43,8 +43,8 @@ const email = ref('')
 const optIn = ref(false)
 const saving = ref(false)
 const currentSaveId = ref<string | null>(null) // the slot Save updates, once this forest has been saved or loaded
-const ui = reactive({ system: false, fruits: false, saves: false, designer: false, birdseye: false, tractor: false, forceDay: false, mobile: false })
-const input = reactive({ forward: false, back: false, left: false, right: false })
+const ui = reactive({ autoOrbit: false, system: false, fruits: false, saves: false, designer: false, birdseye: false, tractor: false, forceDay: false, mobile: false })
+const input = reactive({ forward: false, back: false, left: false, right: false, rotL: false, rotR: false })
 const clock = ref(Date.now())
 const toast = ref('')
 let toastTimer: ReturnType<typeof setTimeout> | undefined

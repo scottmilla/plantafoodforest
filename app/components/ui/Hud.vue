@@ -55,6 +55,11 @@ const night = computed(() => s.env.value.day < 0.2)
       <button class="chip" :class="{ on: s.ui.fruits }" @click="s.ui.fruits = !s.ui.fruits; s.ui.system = false">🍎 Fruits<b v-if="s.edited.value" class="dot" /></button>
       <button class="chip" :class="{ on: s.ui.birdseye }" @click="s.ui.birdseye = !s.ui.birdseye; s.selected.value = null">🦅 Bird's-eye</button>
       <button v-if="s.design.value?.tractor" class="chip" :class="{ on: s.ui.tractor }" @click="s.ui.tractor = !s.ui.tractor">🚜 {{ s.ui.tractor ? 'Hop off' : 'Tractor' }}</button>
+      <div class="orbit" role="group" aria-label="Rotate the view">
+        <button class="chip" aria-label="Rotate left" @pointerdown.prevent="s.input.rotL = true" @pointerup="s.input.rotL = false" @pointerleave="s.input.rotL = false" @pointercancel="s.input.rotL = false">◀</button>
+        <button class="chip" :class="{ on: s.ui.autoOrbit }" aria-label="Slow auto-orbit" :aria-pressed="s.ui.autoOrbit" @click="s.ui.autoOrbit = !s.ui.autoOrbit">🎥</button>
+        <button class="chip" aria-label="Rotate right" @pointerdown.prevent="s.input.rotR = true" @pointerup="s.input.rotR = false" @pointerleave="s.input.rotR = false" @pointercancel="s.input.rotR = false">▶</button>
+      </div>
       <button class="chip" @click="s.ui.saves = true">💾 Save</button>
       <button class="chip" @click="s.restart()">↺ Goals</button>
     </div>
@@ -64,8 +69,8 @@ const night = computed(() => s.env.value.day < 0.2)
       <label class="timeline">
         <span>Year <b>{{ s.year.value }}</b></span>
         <input v-model.number="s.year.value" type="range" min="1" max="20" step="1" aria-label="Years after planting">
-        <small class="for-mouse"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk · click a plant</small>
-        <small class="for-touch">Tap to walk · tap a plant</small>
+        <small class="for-mouse"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk · <kbd>Q</kbd><kbd>E</kbd> or right-drag to spin · click a plant</small>
+        <small class="for-touch">Tap to walk · ◀ ▶ to spin · tap a plant</small>
       </label>
       <button class="btn btn-primary cta" @click="s.ui.designer = true">🌳 Meet with a food forest designer</button>
     </div>

@@ -29,6 +29,10 @@ function onKey(down: boolean) {
       player.focus = null
       return
     }
+    if (e.code === 'KeyQ' || e.code === 'KeyE') {
+      if (s.stage.value !== 'intro') s.input[e.code === 'KeyQ' ? 'rotL' : 'rotR'] = down
+      return
+    }
     const k = keyMap[e.code]
     if (!k) return
     e.preventDefault()
@@ -78,7 +82,14 @@ onBeforeRender(({ delta, elapsed }) => {
   const i = s.input
   let dx = (i.right ? 1 : 0) - (i.left ? 1 : 0)
   let dz = (i.back ? 1 : 0) - (i.forward ? 1 : 0)
-  if (dx !== 0 || dz !== 0) player.target = null
+  if (dx !== 0 || dz !== 0) {
+    player.target = null
+    // W always means "away from the screen", however the view has been spun
+    const yaw = s.stage.value === 'intro' ? 0 : player.yaw
+    const c = Math.cos(yaw)
+    const sn = Math.sin(yaw)
+    ;[dx, dz] = [dx * c + dz * sn, -dx * sn + dz * c]
+  }
   const tgt = player.target
   if (tgt && !(dx !== 0 || dz !== 0)) {
     const tx = tgt.x - player.x

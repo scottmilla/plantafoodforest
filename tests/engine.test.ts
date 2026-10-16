@@ -135,3 +135,58 @@ describe('fruit picker', () => {
   })
 })
 
+describe('herb & shrub layer', () => {
+  const herbsOf = (d: { species: { roles: string[]; id: string }[] }) => d.species.filter((x) => x.roles.includes('herb'))
+  const sites = { maryland, nicaragua, vermont }
+
+  it('every design, in every climate, includes herbs', () => {
+    for (const [name, site] of Object.entries(sites)) {
+      for (const goals of [['money', 'yearRound'], ['yearRound', 'natives'], ['natives', 'restoration'], ['restoration', 'rare'], ['rare', 'timber'], ['timber', 'money']] as const) {
+        for (const d of design({ site, areaM2: 4000, goals: [...goals] }).designs) {
+          expect(herbsOf(d).length, `${name} ${goals.join('+')} ${d.name}`).toBeGreaterThanOrEqual(2)
+          expect(d.plants.some((p) => d.species[p.s]!.roles.includes('herb'))).toBe(true)
+        }
+      }
+    }
+  })
+
+  it('the money design keeps a small market-herb row; family designs get a fuller kitchen', () => {
+    const [money, larder] = design({ site: maryland, areaM2: 4000, goals: ['money', 'yearRound'] }).designs
+    expect(herbsOf(money!).length).toBe(2)
+    expect(herbsOf(larder!).length).toBeGreaterThanOrEqual(4)
+    // a family kitchen leans on culinary herbs
+    expect(herbsOf(larder!).map((h) => h.id)).toEqual(expect.arrayContaining(['thyme']))
+  })
+
+  it('natives designs use only native herbs', () => {
+    for (const d of design({ site: maryland, areaM2: 4000, goals: ['natives', 'restoration'] }).designs.slice(0, 2)) {
+      expect(herbsOf(d).every((h) => (d.species.find((x) => x.id === h.id) as any).native)).toBe(true)
+    }
+  })
+
+  it('only offers herbs that can grow at the site', () => {
+    const cold = design({ site: vermont, areaM2: 2000, goals: ['yearRound', 'money'] }).catalog.filter((c) => c.kind === 'herb').map((c) => c.id)
+    expect(cold).toContain('chives')
+    for (const tropical of ['tulsi', 'culantro', 'stevia', 'curry-leaf', 'roselle', 'aloe', 'rosemary']) expect(cold).not.toContain(tropical)
+    const hot = design({ site: nicaragua, areaM2: 2000, goals: ['yearRound', 'money'] }).catalog.filter((c) => c.kind === 'herb').map((c) => c.id)
+    expect(hot).toContain('tulsi')
+    expect(hot).not.toContain('goldenseal')
+  })
+
+  it('herbs can be removed and added in the picker', () => {
+    const base = design({ site: maryland, areaM2: 4000, goals: ['yearRound', 'money'] })
+    const d0 = base.designs[0]!
+    const gone = herbsOf(d0)[0]!.id
+    const extra = base.catalog.find((c) => c.kind === 'herb' && !herbsOf(d0).some((h) => h.id === c.id))!.id
+    const d1 = design({ site: maryland, areaM2: 4000, goals: ['yearRound', 'money'], overrides: { a: { add: [extra], remove: [gone] } } }).designs[0]!
+    expect(herbsOf(d1).map((h) => h.id)).not.toContain(gone)
+    expect(herbsOf(d1).map((h) => h.id)).toContain(extra)
+  })
+
+  it('herbs do not count as fruit in the harvest calendar or first-harvest year', () => {
+    const d = design({ site: maryland, areaM2: 4000, goals: ['natives', 'timber'] }).designs[0]!
+    const fruitOnly = d.species.filter((x) => x.yieldKg > 0 && x.yearsToFruit > 0 && !x.roles.includes('herb'))
+    expect(d.stats.firstHarvestYear).toBe(Math.min(...fruitOnly.map((x) => x.yearsToFruit)))
+  })
+})
+

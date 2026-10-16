@@ -28,6 +28,31 @@ let rot = new Float32Array(0)
 let growStart = -1
 let dirty = true
 let elapsedNow = 0
+// distance to the nearest living neighbour in the same stratum: canopies are managed (pruned) to fit it,
+// so trees in a line stay separate instead of growing into each other as the years pass
+let room = new Float32Array(0)
+let roomYear = NaN
+
+function computeRoom(d: Design, year: number) {
+  const n = d.plants.length
+  room = new Float32Array(n).fill(Infinity)
+  const alive: number[] = []
+  d.plants.forEach((p, i) => { if (plantGrowth(d.species[p.s]!, year, hash(i * 5 + 1)) > 0.001) alive.push(i) })
+  for (let a = 0; a < alive.length; a++) {
+    const i = alive[a]!
+    const pi = d.plants[i]!
+    const st = d.species[pi.s]!.strata
+    for (let b = a + 1; b < alive.length; b++) {
+      const j = alive[b]!
+      const pj = d.plants[j]!
+      if (d.species[pj.s]!.strata !== st) continue
+      const dist = Math.hypot(pi.x - pj.x, pi.z - pj.z)
+      if (dist < room[i]!) room[i] = dist
+      if (dist < room[j]!) room[j] = dist
+    }
+  }
+  roomYear = year
+}
 
 function dispose() {
   for (const m of [...Object.values(canopies), trunks, fruit]) if (m) { group.remove(m); m.dispose() }
@@ -69,6 +94,7 @@ function build(d: Design | null) {
     delays[i] = (Math.hypot(p.x - player.x, p.z - player.z) / maxD) * 1.4 + hash(i) * 0.15
     rot[i] = hash(i * 7 + 3) * Math.PI * 2
   })
+  roomYear = NaN
   growStart = elapsedNow
   dirty = true
 }
@@ -88,10 +114,11 @@ function update(anim: number) {
   let ti = 0
   let fi = 0
   const t = elapsedNow - growStart
+  if (roomYear !== year) computeRoom(d, year)
   const colorPass = dirty
   d.plants.forEach((p, i) => {
     const sp: DesignSpecies = d.species[p.s]!
-    const g0 = plantGrowth(sp, year)
+    const g0 = plantGrowth(sp, year, hash(i * 5 + 1))
     let a = 1
     if (anim) {
       const k = Math.min(1, Math.max(0, (t - delays[i]!) / 0.7))
@@ -104,7 +131,7 @@ function update(anim: number) {
     const h = Math.max(0.05, sp.heightM * g * (cut < 1 ? 0.75 : 1))
     const cs = canopyScaleFor(sp.deciduous, env.season, env.lush)
     // syntropic systems keep big canopies pruned; drawing them at full wild spread would hide everything below
-    const w = Math.max(0.15, Math.min(sp.widthM, 3 + sp.widthM * 0.45) * g * cut)
+    const w = Math.max(0.15, Math.min(Math.min(sp.widthM, 3 + sp.widthM * 0.45) * g * cut, room[i]! * 0.9))
     const ci = (counters[f] = (counters[f] ?? -1) + 1)
     const cm = canopies[f]!
     canopyIds[f]![ci] = i

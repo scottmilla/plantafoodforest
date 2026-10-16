@@ -8,16 +8,14 @@ const s = useSurvey()
 const d = computed(() => s.design.value)
 
 const FOOD = ['fruit', 'berry', 'nut']
-const inDesign = computed(() =>
-  (d.value?.species ?? [])
-    .filter((sp) => sp.yieldKg > 0 && sp.yearsToFruit > 0 && sp.roles.some((r) => FOOD.includes(r)))
-    .sort((a, b) => a.yearsToFruit - b.yearsToFruit || b.count - a.count),
-)
+const byYear = (a: { yearsToFruit: number; count: number }, b: { yearsToFruit: number; count: number }) => a.yearsToFruit - b.yearsToFruit || b.count - a.count
+const fruitsIn = computed(() => (d.value?.species ?? []).filter((sp) => sp.yieldKg > 0 && sp.yearsToFruit > 0 && !sp.roles.includes('herb') && sp.roles.some((r) => FOOD.includes(r))).sort(byYear))
+const herbsIn = computed(() => (d.value?.species ?? []).filter((sp) => sp.roles.includes('herb')).sort(byYear))
 const inIds = computed(() => new Set((d.value?.species ?? []).map((sp) => sp.id)))
 const scale = computed(() => d.value?.plot.scale ?? 1)
 
-type Filter = 'all' | 'recommended' | 'native' | 'early' | 'berry' | 'nut'
-const FILTERS: [Filter, string][] = [['recommended', '⭐ Recommended'], ['all', 'All'], ['native', '🪶 Native'], ['early', '⏱ Early'], ['berry', '🫐 Berries'], ['nut', '🌰 Nuts']]
+type Filter = 'all' | 'recommended' | 'native' | 'early' | 'berry' | 'nut' | 'herb'
+const FILTERS: [Filter, string][] = [['recommended', '⭐ Recommended'], ['all', 'All'], ['native', '🪶 Native'], ['early', '⏱ Early'], ['berry', '🫐 Berries'], ['nut', '🌰 Nuts'], ['herb', '🌿 Herbs']]
 const filter = ref<Filter>('recommended')
 const q = ref('')
 
@@ -34,6 +32,7 @@ const shown = computed(() => {
       case 'early': return c.yearsToFruit <= 2
       case 'berry': return c.roles.includes('berry')
       case 'nut': return c.roles.includes('nut')
+      case 'herb': return c.kind === 'herb'
       default: return true
     }
   })
@@ -47,7 +46,7 @@ const label = computed(() => `Design ${'ABC'[s.active.value]}`)
     <aside v-if="d && s.ui.fruits && s.stage.value === 'explore' && s.selected.value === null" class="system fruits card">
       <button class="close" aria-label="Close" @click="s.ui.fruits = false">✕</button>
       <p class="type">{{ label }} · {{ d.name }}</p>
-      <h2>Your fruits, berries &amp; nuts</h2>
+      <h2>Your fruits &amp; herbs</h2>
       <p class="tag">Only plants that can grow in {{ s.site.value?.label }} (zone {{ s.site.value?.zoneLabel }}). Take any out, add your favourites, and the model re-plants around you.</p>
 
       <div class="picker-status">
@@ -57,9 +56,9 @@ const label = computed(() => `Design ${'ABC'[s.active.value]}`)
         <button v-if="s.edited.value" class="chip tiny" @click="s.resetFruit()">↺ Reset</button>
       </div>
 
-      <h3>In this design · {{ inDesign.length }}</h3>
+      <h3>Fruits, berries &amp; nuts · {{ fruitsIn.length }}</h3>
       <ul class="frows">
-        <li v-for="sp in inDesign" :key="sp.id" :style="{ '--accent': sp.fruit ?? sp.leaf }">
+        <li v-for="sp in fruitsIn" :key="sp.id" :style="{ '--accent': sp.fruit ?? sp.leaf }">
           <span class="fe">{{ sp.emoji }}</span>
           <span class="fi">
             <b>{{ sp.name }}</b>
@@ -69,11 +68,26 @@ const label = computed(() => `Design ${'ABC'[s.active.value]}`)
           </span>
           <button class="rb minus" :aria-label="`Remove ${sp.name}`" @click="s.removeFruit(sp.id)">−</button>
         </li>
-        <li v-if="!inDesign.length" class="empty">Nothing left to harvest. Add some fruit below.</li>
+        <li v-if="!fruitsIn.length" class="empty">No fruit left. Add some below.</li>
       </ul>
 
-      <h3>Add from what grows here</h3>
-      <input v-model="q" class="field search" type="search" placeholder="Search fruits…" aria-label="Search fruits">
+      <h3>Herb &amp; shrub layer · {{ herbsIn.length }}</h3>
+      <ul class="frows">
+        <li v-for="sp in herbsIn" :key="sp.id" :style="{ '--accent': sp.fruit ?? sp.leaf }">
+          <span class="fe">{{ sp.emoji }}</span>
+          <span class="fi">
+            <b>{{ sp.name }}</b>
+            <small>
+              <template v-if="sp.native">🪶 </template>picking from year {{ sp.yearsToFruit }} · {{ fmtWindow(sp.harvest) }} · ×{{ Math.round(sp.count * scale).toLocaleString() }}
+            </small>
+          </span>
+          <button class="rb minus" :aria-label="`Remove ${sp.name}`" @click="s.removeFruit(sp.id)">−</button>
+        </li>
+        <li v-if="!herbsIn.length" class="empty">No herbs left. Add some below.</li>
+      </ul>
+
+      <h3>Add what grows here</h3>
+      <input v-model="q" class="field search" type="search" placeholder="Search fruits &amp; herbs…" aria-label="Search fruits and herbs">
       <div v-if="!q" class="filters">
         <button v-for="[f, name] in FILTERS" :key="f" class="chip tiny" :class="{ on: filter === f }" @click="filter = f">{{ name }}</button>
       </div>
@@ -83,7 +97,7 @@ const label = computed(() => `Design ${'ABC'[s.active.value]}`)
           <span class="fi">
             <b>{{ c.name }}<em v-if="c.recommended"> ⭐</em></b>
             <small>
-              <template v-if="c.native">🪶 native · </template><template v-if="c.marginal">🌡️ edge of zone · </template>year {{ c.yearsToFruit }} · {{ fmtWindow(c.harvest) }}
+              <template v-if="c.kind === 'herb'">🌿 herb · </template><template v-if="c.native">🪶 native · </template><template v-if="c.marginal">🌡️ edge of zone · </template>year {{ c.yearsToFruit }} · {{ fmtWindow(c.harvest) }}
             </small>
           </span>
           <button class="rb plus" :class="{ undo: wasAdded(c) }" :aria-label="`Add ${c.name}`" @click="s.addFruit(c.id)">+</button>

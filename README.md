@@ -41,6 +41,8 @@ How each goal shapes a design (goal 1 decides the layout; goal 2 nudges species 
 - **Rare / zone pushing: Edge of the Zone.** Allows species up to a zone warmer than the site (cold-hardy citrus, olive, loquat, feijoa in 7b/8a), combined with season-stretching.
 - **Timber: Timber Succession.** Fast support trees training hardwoods; wider lines.
 
+Every design also gets a **herb & shrub layer** (kitchen, tea, medicinal and pollinator herbs: ~45 in `species.ts`, picked per region and spread across uses): two market herbs in the money design, four or five in the others, native-only in natives designs. Herbs are in the fruit picker too and don't count toward the fruit harvest calendar.
+
 Strata follow Götsch: emergent ~20% / high ~40% / medium ~60% / low ~80% occupancy, set here as in-line spacings of roughly 16 / 8 / 4 / 2 m, plus ground cover. How many strata a design stacks depends on climate: all five in the tropics, fewer toward the poles and on small lots.
 
 **Growing it into a "real" model later:** keep the `DesignRequest → DesignResponse` contract in `shared/types.ts`. Designs your designers actually install (from leads) become labelled training data. Swap the scoring step (`goalScore`) for a learned ranker first, and the rest of the pipeline stays. To run it as a separate service, move `server/model/` into its own package and point `/api/design` at it.
